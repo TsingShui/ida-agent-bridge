@@ -1,0 +1,25 @@
+# IDA 数据库文件
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+*.so.*
+
+# Python 环境
+.venv/
+.python-version
+__pycache__/
+uv.lock
+
+# 导出目录
+ida-bridge-*/
+
+# 杂项
+.DS_Store
+export_test/
+.pytest_cache/
+.claude/
+/docs/superpowers/*
