@@ -5,13 +5,6 @@ description: Use when writing ida-domain scripts, querying .i64 databases, or an
 
 # IDA Domain API Reference
 
-Use `ida-domain` (Python library on top of IDA Python SDK) to script IDA Pro 9.1.0+.
-
-```bash
-uv add "ida-domain>=0.5.0"   # or: pip install "ida-domain>=0.5.0"
-```
-
----
 
 ## 工作流
 
