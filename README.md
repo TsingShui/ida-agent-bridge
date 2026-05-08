@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-CLI 优先、AI 原生的 IDA Pro 分析桥，遵循 Unix 设计哲学。每条命令输出纯文本，与 `grep`、`sort`、`awk`、`jq` 等工具自然组合；反编译结果实时同步到本地文件系统——Agent 像读文件一样读二进制，脚本像管道一样串联分析流程。
+CLI 优先、无头、AI 原生的 IDA Pro 分析桥，遵循 Unix 设计哲学。每条命令输出纯文本，与 `grep`、`sort`、`awk`、`jq` 等工具自然组合；反编译结果实时同步到本地文件系统——Agent 像读文件一样读二进制，脚本像管道一样串联分析流程。
 
 `ida-pro` `ida-python` `ida-cli` `binary-analysis` `reverse-engineering` `ai-agent` `llm-tools` `decompiler`
 

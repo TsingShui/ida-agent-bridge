@@ -2,7 +2,7 @@
 
 [中文](README.md)
 
-A CLI-first, AI-native IDA Pro bridge built on Unix philosophy. Every command outputs plain text to stdout — pipe it directly into `grep`, `sort`, `awk`, `jq` or any shell tool. Decompilation results sync to the local filesystem in real time; agents read binaries like files, scripts chain analysis like pipelines.
+A CLI-first, headless, AI-native IDA Pro bridge built on Unix philosophy. Every command outputs plain text to stdout — pipe it directly into `grep`, `sort`, `awk`, `jq` or any shell tool. Decompilation results sync to the local filesystem in real time; agents read binaries like files, scripts chain analysis like pipelines.
 
 `ida-pro` `ida-python` `ida-cli` `binary-analysis` `reverse-engineering` `ai-agent` `llm-tools` `decompiler`
 
