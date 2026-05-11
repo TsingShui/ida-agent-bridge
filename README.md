@@ -30,6 +30,30 @@ ida-bridge a.out --repl-only  # 仅启动 REPL，跳过导出和 hooks
 
 **后续启动**：对比函数 hash，只导出变更函数，秒级完成。
 
+### 与 Claude Code 配合使用
+
+```
+$ ida-bridge a.out &
+INFO  opening a.out...
+INFO  warmup: 100/842 (12s elapsed)
+INFO  warmup: 200/842 (25s elapsed)
+...
+INFO  type info warmed in 89.3s
+INFO  sync done in 94.1s
+
+$ cc "分析 a.out 里的 JNI 函数，找出签名逻辑"
+> 读 ida-bridge-a.out/function_index.tsv，搜 jni...
+  找到 3 个函数：jni_sign_data (0x401320)、jni_verify_sig (0x4014d8)、JNI_OnLoad (0x4012a0)
+> echo '!pdc 0x401320' | nc localhost 13120
+  void *jni_sign_data(JNIEnv *env, jobject thiz, jbyteArray data) { ... }
+> echo '!axt 0x401320' | nc localhost 13120
+  0x4012a0  CALL_NEAR  [in: JNI_OnLoad]
+> echo '!afn 0x401320 Java_com_example_Crypto_sign' | nc localhost 13120
+  renamed: jni_sign_data → Java_com_example_Crypto_sign
+> 读 ida-bridge-a.out/decompile/401320.c  ← 确认同步
+  ; Java_com_example_Crypto_sign @ 0x401320  ✓
+```
+
 ## 核心能力示例
 
 ### 实时文件系统

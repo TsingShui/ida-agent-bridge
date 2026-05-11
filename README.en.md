@@ -30,6 +30,30 @@ ida-bridge a.out --repl-only  # REPL only, skip export and hooks
 
 **Subsequent runs:** compare function hashes, only re-export changed functions — completes in seconds.
 
+### Using with Claude Code
+
+```
+$ ida-bridge a.out &
+INFO  opening a.out...
+INFO  warmup: 100/842 (12s elapsed)
+INFO  warmup: 200/842 (25s elapsed)
+...
+INFO  type info warmed in 89.3s
+INFO  sync done in 94.1s
+
+$ cc "analyze the JNI functions in a.out and find the signing logic"
+> read ida-bridge-a.out/function_index.tsv, search jni...
+  found 3 functions: jni_sign_data (0x401320), jni_verify_sig (0x4014d8), JNI_OnLoad (0x4012a0)
+> echo '!pdc 0x401320' | nc localhost 13120
+  void *jni_sign_data(JNIEnv *env, jobject thiz, jbyteArray data) { ... }
+> echo '!axt 0x401320' | nc localhost 13120
+  0x4012a0  CALL_NEAR  [in: JNI_OnLoad]
+> echo '!afn 0x401320 Java_com_example_Crypto_sign' | nc localhost 13120
+  renamed: jni_sign_data → Java_com_example_Crypto_sign
+> read ida-bridge-a.out/decompile/401320.c  ← confirm sync
+  ; Java_com_example_Crypto_sign @ 0x401320  ✓
+```
+
 ## Core Capabilities
 
 ### Real-time File System
