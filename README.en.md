@@ -15,7 +15,7 @@ A CLI-first, headless, AI-native IDA Pro bridge built on Unix philosophy. Every 
 [ -z "$IDADIR" ] && echo "Set IDADIR first, e.g. export IDADIR=\"/Applications/IDA Professional 9.3.app/Contents/MacOS\"" && exit 1
 
 git clone https://github.com/TsingShui/ida-agent-bridge.git ~/.claude/skills/ida-agent-bridge
-uv tool install ~/.claude/skills/ida-agent-bridge
+uv tool install -e ~/.claude/skills/ida-agent-bridge
 ```
 
 ## Quick Start

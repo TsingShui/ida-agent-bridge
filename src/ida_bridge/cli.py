@@ -26,7 +26,39 @@ def _default_export_dir(binary_path: str) -> str:
     return os.path.join(os.getcwd(), f'ida-bridge-{stem}')
 
 
+def _check_update_async() -> None:
+    import threading
+
+    def _check():
+        try:
+            import urllib.request, json
+            url = "https://api.github.com/repos/TsingShui/ida-agent-bridge/commits/main"
+            req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.sha"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                remote_sha = resp.read().decode().strip()
+
+            import subprocess, pathlib
+            repo = pathlib.Path(__file__).parent.parent.parent.parent  # src/ida_bridge -> repo root
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo, capture_output=True, text=True, timeout=5,
+            )
+            local_sha = result.stdout.strip()
+            if local_sha and remote_sha and not remote_sha.startswith(local_sha) and local_sha != remote_sha:
+                logger.warning(
+                    "ida-agent-bridge has updates: local=%s remote=%s\n"
+                    "  run: cd %s && git pull",
+                    local_sha[:8], remote_sha[:8], repo,
+                )
+        except Exception:
+            pass
+
+    threading.Thread(target=_check, daemon=True).start()
+
+
 def main() -> None:
+    _check_update_async()
+
     if len(sys.argv) < 2:
         print(
             "Usage: ida-bridge <binary_or_i64> [export_dir] [port] [flags]\n"
