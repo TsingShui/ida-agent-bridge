@@ -56,15 +56,37 @@ Python 脚本（cat script.py | nc localhost PORT）
 
 不需要写 Python，直接发单行命令。**这是最快的操作方式。**
 
+地址和函数名均可互换（`0x...` 十六进制地址或符号名）。
+
 ### 探索与查询
 
 ```bash
-echo '!?' | nc localhost <port>                        # 帮助
 echo '!afl' | nc localhost <port>                      # 列出所有函数
 echo '!afl jni' | nc localhost <port>                  # 搜含 jni 的函数名
-echo '!afi main' | nc localhost <port>                 # 函数详情（大小/调用者/被调用者）
+echo '!afi main' | nc localhost <port>                 # 函数详情
 echo '!iz ssl' | nc localhost <port>                   # 搜含 ssl 的字符串
-echo '!axi malloc' | nc localhost <port>               # 查导入符号 malloc 的所有调用点
+echo '!axi malloc' | nc localhost <port>               # 导入符号的所有调用点
+```
+
+输出格式：
+
+```
+# !afl — TAB 分隔: 地址  名称  大小(hex)  callers=N
+0x11f0	_ossl_fnv1a_hash	0x38	callers=0
+0x1228	_ossl_ctype_check	0x28	callers=2
+
+# !afi — 键值对
+name:     _ossl_fnv1a_hash
+addr:     0x11f0 - 0x1228
+size:     0x38 (56)
+callers:  0
+callees:  0
+
+# !iz — 地址  内容  refs=N  [引用函数]
+0x810ee	ossltest  refs=1  [_alpn_select_cb]
+
+# !axi — 地址  引用类型  [所在函数]
+0x12f0    CALL_NEAR  [in: _SSL_read]
 ```
 
 ### 交叉引用
@@ -74,18 +96,52 @@ echo '!axt 0x1234' | nc localhost <port>               # xrefs to 地址
 echo '!axf main' | nc localhost <port>                 # xrefs from 函数名
 ```
 
+输出格式：
+
+```
+# !axt / !axf — 地址  引用类型  [所在函数]
+0x2f020    CALL_NEAR  [in: _ossl_qlog_set_filter]
+0x2f064    CALL_NEAR  [in: _ossl_qlog_set_filter]
+```
+
 ### 反汇编与伪代码
 
 ```bash
 echo '!pd 0x1234' | nc localhost <port>                # 从地址反汇编 16 条（默认）
 echo '!pd 0x1234 32' | nc localhost <port>             # 反汇编 32 条
-echo '!pdf main' | nc localhost <port>                 # 反汇编整个函数（带 CFG block 标注）
-echo '!pdc 0x1234' | nc localhost <port>               # 查看伪代码
-echo '!pdc 0x1234 -s' | nc localhost <port>           # 过滤变量声明（大函数用）
-echo '!mc main' | nc localhost <port>                  # 查看函数微码（默认 generated）
-echo '!mc main lvars' | nc localhost <port>            # 微码：generated/preopt/locopt/calls/glbopt1/glbopt2/glbopt3/lvars
+echo '!pdf main' | nc localhost <port>                 # 整函数反汇编（带 CFG block 标注）
+echo '!pdc 0x1234' | nc localhost <port>               # 伪代码
+echo '!pdc 0x1234 -s' | nc localhost <port>            # 过滤变量声明（大函数用）
+echo '!mc main' | nc localhost <port>                  # 微码（默认 generated）
+echo '!mc main lvars' | nc localhost <port>            # 微码 maturity: generated/preopt/locopt/calls/glbopt1/glbopt2/glbopt3/lvars
 echo '!deps main' | nc localhost <port>                # 递归调用链（默认深度 3）
 echo '!deps main 5' | nc localhost <port>              # 调用链深度 5
+```
+
+输出格式：
+
+```
+# !pd — 地址  指令助记符  操作数
+0x11f0  MOV             X8, X0
+0x11f4  MOV             X0, #0xCBF29CE484222325
+
+# !pdf — 带 CFG block 标注的反汇编
+; block 0  [0x11f0 - 0x1208]
+0x11f0  MOV             X8, X0
+0x1204  CBZ             X1, locret_1224    ; true→ 0x1224  false→ 0x1208
+; block 1  [0x1208 - 0x1210]
+0x1208  MOV             X9, #0x100000001B3    ; → 0x1210
+
+# !pdc — C 伪代码，首行注释标注函数名和地址
+; _ossl_fnv1a_hash @ 0x11f0
+__int64 __fastcall ossl_fnv1a_hash(unsigned __int8 *a1, __int64 a2)
+{
+  ...
+}
+
+# !deps — 缩进树形调用链
+_ossl_isdigit  [0x1250]
+  _ossl_ctype_check  [0x1228]
 ```
 
 ### 修改与注释
@@ -94,17 +150,34 @@ echo '!deps main 5' | nc localhost <port>              # 调用链深度 5
 echo '!afn 0x1234 sign_request' | nc localhost <port>  # 重命名函数（自动同步导出，caller 级联刷新）
 echo '!cc main entry point' | nc localhost <port>      # 设置函数级注释（Function Comment）
 echo '!ca 0x1234 key check here' | nc localhost <port> # 设置地址级注释（Address Comment）
+```
+
+### 工具
+
+```bash
 echo '!sb  01 14 40 f9' | nc localhost <port>           # 搜索字节序列（全局）
 echo '!sb  01 14 40 f9 0x1000 0x5000' | nc localhost <port>  # 限定地址范围搜索
 echo '!hd  0x1234' | nc localhost <port>                # hexdump 64 字节（默认）
-echo '!hd  0x1234 128' | nc localhost <port>           # hexdump 128 字节
+echo '!hd  0x1234 128' | nc localhost <port>            # hexdump 128 字节
 echo '!hd  func_name' | nc localhost <port>            # 符号名同样支持
-echo '!pwd' | nc localhost <port>                      # 当前工作目录
 echo '!ping' | nc localhost <port>                     # 探活，返回打开的文件路径
+echo '!pwd' | nc localhost <port>                      # 当前工作目录
 echo '!quit' | nc localhost <port>                     # 关闭服务
 ```
 
-地址和函数名均可互换（`0x...` 十六进制地址或符号名）。
+输出格式：
+
+```
+# !sb — 地址  函数名+偏移  [所在函数]
+0x2e00  _ssl_ctrl+0x20  [in: _ssl_ctrl]
+0x3a1f  _dtls1_start_timer+0x43  [in: _dtls1_start_timer]
+
+# !hd — 地址  hex bytes  ASCII
+0x11f0  e8 03 00 aa a0 64 84 d2 40 84 b0 f2 80 9c d3 f2  .....d..@.......
+
+# !ping — 返回当前打开的文件绝对路径
+/path/to/libssl.dylib
+```
 
 ### 与 Bash 工具联动
 
