@@ -59,7 +59,7 @@ def _send_and_recv(port: int, data: bytes, timeout: float = 10.0) -> bytes:
 def repl_port(db):
     """Start a REPL server in a background thread and yield its port.
 
-    The server is shut down after the test by sending __QUIT__.
+    The server is shut down after the test by sending !quit.
     """
     from ida_bridge.repl import serve
 
@@ -86,9 +86,9 @@ def repl_port(db):
 
     yield port
 
-    # teardown: 发送 __QUIT__ 关停
+    # teardown: 发送 !quit 关停
     try:
-        _send_and_recv(port, b"__QUIT__", timeout=5.0)
+        _send_and_recv(port, b"!quit", timeout=5.0)
     except Exception:
         pass
     t.join(timeout=5.0)
@@ -133,12 +133,12 @@ class TestShortConnection:
 
 
 # ---------------------------------------------------------------------------
-# __QUIT__ 协议
+# !quit 协议
 # ---------------------------------------------------------------------------
 
 class TestQuit:
     def test_quit_stops_server(self, db):
-        """__QUIT__ 应该让 serve() 返回。"""
+        """!quit 应该让 serve() 返回。"""
         from ida_bridge.repl import serve
 
         port = _free_port()
@@ -161,8 +161,8 @@ class TestQuit:
             except ConnectionRefusedError:
                 time.sleep(0.1)
 
-        resp = _send_and_recv(port, b"__QUIT__")
+        resp = _send_and_recv(port, b"!quit")
         assert b"stopped" in resp
 
-        assert done.wait(timeout=5.0), "serve() did not return after __QUIT__"
+        assert done.wait(timeout=5.0), "serve() did not return after !quit"
         t.join(timeout=5.0)

@@ -36,6 +36,7 @@ HELP = (
     "!syms <path>                 export symbols for tsrace\n"
     "!pwd                         working directory\n"
     "!ping                        check server, show open file\n"
+    "!quit                        shut down server\n"
 )
 
 
@@ -61,6 +62,7 @@ def dispatch(db, cmd_line: str) -> str:
         case "!syms":          return run_syms(db, parts)
         case "!pwd":           return os.getcwd()
         case "!ping":          return db.path or "unknown"
+        case "!quit":          return "__QUIT__"
         case cmd:              return f"unknown command: {cmd}  (try !?)"
 
 

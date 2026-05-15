@@ -170,7 +170,7 @@ echo "!axt $ADDR" | nc localhost 13120
 ```
 
 ```bash
-echo '__QUIT__' | nc localhost 13120   # 关闭服务
+echo '!quit' | nc localhost 13120      # 关闭服务
 ```
 
 ---

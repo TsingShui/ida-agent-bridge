@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 13120
 DEFAULT_SHELL_PORT = 13121
-QUIT_CMD = "__QUIT__"
+_QUIT_MARKER = "__QUIT__"
 
 
 def serve(db, port: int, ns: dict[str, Any], hooks=None,
@@ -80,12 +80,12 @@ def serve(db, port: int, ns: dict[str, Any], hooks=None,
                             chunks.append(chunk)
                         code = b"".join(chunks).decode()
 
-                        if code.strip() == QUIT_CMD:
+                        output, exit_code = exec_one(db, ns, code, hooks=hooks)
+                        if _QUIT_MARKER in output.decode(errors="replace"):
                             conn.sendall(b"stopped\n")
+                            conn.sendall(b"\n__EXIT_0__\n")
                             shutdown.set()
                             break
-
-                        output, exit_code = exec_one(db, ns, code, hooks=hooks)
                         if output:
                             conn.sendall(output)
                         conn.sendall(f"\n__EXIT_{exit_code}__\n".encode())

@@ -170,7 +170,7 @@ All commands are sent via `echo '!cmd' | nc localhost 13120`. Addresses accept h
 ```
 
 ```bash
-echo '__QUIT__' | nc localhost 13120   # shut down
+echo '!quit' | nc localhost 13120      # shut down
 ```
 
 ---

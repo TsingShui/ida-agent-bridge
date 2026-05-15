@@ -139,8 +139,8 @@ done
 ```bash
 cat my_script.py | nc localhost $PORT
 
-# 关闭 REPL
-echo '__QUIT__' | nc localhost $PORT
+# 关闭服务
+echo '!quit' | nc localhost $PORT
 ```
 
 典型脚本模式：
