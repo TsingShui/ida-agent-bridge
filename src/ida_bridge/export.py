@@ -311,21 +311,7 @@ def sync_exports(db, export_dir: str, compute_metrics: bool | None = None) -> No
         compute_metrics = config.get("compute_metrics", False)
 
     if not os.path.isdir(decompile_dir):
-        logger.info("no prior export found, warming up type info...")
-        t_warm = time.monotonic()
-        all_funcs = [f for f in db.functions.get_all()
-                     if not (ida_funcs.get_func(f.start_ea) and
-                             ida_funcs.get_func(f.start_ea).flags & ida_funcs.FUNC_LIB)]
-        total = len(all_funcs)
-        for i, func in enumerate(all_funcs):
-            try:
-                db.pseudocode.get_text(func)
-            except Exception:
-                pass
-            if (i + 1) % 100 == 0 or (i + 1) == total:
-                logger.info("warmup: %d/%d (%.0fs elapsed)", i + 1, total, time.monotonic() - t_warm)
-        logger.info("type info warmed in %.1fs", time.monotonic() - t_warm)
-        logger.info("running full export...")
+        logger.info("no prior export found, running full export...")
         export_all(db, export_dir, compute_metrics=compute_metrics)
         logger.info("sync done in %.1fs", time.monotonic() - t0)
         return
