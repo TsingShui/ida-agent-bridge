@@ -1,7 +1,7 @@
 import os
 import tempfile
 from types import SimpleNamespace
-from ida_bridge.export import _addr_list, _read_file_hash, _write_func, _write_index, parse_addrs
+from ida_bridge.export import _addr_list, _read_hash_index, _write_hash_index, _write_func, _write_index, parse_addrs
 
 
 class TestAddrList:
@@ -18,33 +18,29 @@ class TestAddrList:
         assert result == "0x1000,0x2000"
 
 
-class TestReadFileHash:
+class TestHashIndex:
     def test_missing_file(self):
-        assert _read_file_hash("/nonexistent", 0x1000) is None
+        assert _read_hash_index("/nonexistent") == {}
 
-    def test_hash_present(self):
+    def test_round_trip(self):
         with tempfile.TemporaryDirectory() as d:
-            os.makedirs(os.path.join(d, "decompile"))
-            path = os.path.join(d, "decompile", "1000.c")
-            with open(path, "w") as f:
-                f.write("/*\n * func-name: foo\n * func-hash: abc123\n */\nvoid foo(){}\n")
-            assert _read_file_hash(d, 0x1000) == "abc123"
+            index = {0x1000: "abc123", 0x2000: "def456"}
+            _write_hash_index(d, index)
+            assert _read_hash_index(d) == index
 
-    def test_no_hash_line(self):
+    def test_empty(self):
         with tempfile.TemporaryDirectory() as d:
-            os.makedirs(os.path.join(d, "decompile"))
-            path = os.path.join(d, "decompile", "1000.c")
-            with open(path, "w") as f:
-                f.write("/*\n * func-name: foo\n */\nvoid foo(){}\n")
-            assert _read_file_hash(d, 0x1000) is None
+            _write_hash_index(d, {})
+            assert _read_hash_index(d) == {}
 
-    def test_stop_at_end_comment(self):
+    def test_sorted_keys(self):
+        import json
         with tempfile.TemporaryDirectory() as d:
-            os.makedirs(os.path.join(d, "decompile"))
-            path = os.path.join(d, "decompile", "1000.c")
-            with open(path, "w") as f:
-                f.write("/*\n * func-name: foo\n */\n * func-hash: sneaky\nvoid foo(){}\n")
-            assert _read_file_hash(d, 0x1000) is None
+            index = {0x3000: "ccc", 0x1000: "aaa", 0x2000: "bbb"}
+            _write_hash_index(d, index)
+            with open(os.path.join(d, "hash_index.json")) as f:
+                raw = json.load(f)
+            assert list(raw.keys()) == ["1000", "2000", "3000"]
 
 
 class TestWriteFuncWithHash:

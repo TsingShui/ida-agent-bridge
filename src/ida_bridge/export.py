@@ -1,5 +1,6 @@
+import json
 import os
-import hashlib
+import zlib
 import logging
 import shutil
 from typing import Any
@@ -12,13 +13,12 @@ MAX_FUNC_INSNS = 3000
 
 
 def func_hash(db, func) -> str:
-    h = hashlib.md5()
-    h.update((db.functions.get_name(func) or "").encode())
-    h.update((db.functions.get_comment(func) or "").encode())
-    h.update((db.functions.get_comment(func, repeatable=True) or "").encode())
+    c = zlib.crc32((db.functions.get_name(func) or "").encode())
+    c = zlib.crc32((db.functions.get_comment(func) or "").encode(), c)
+    c = zlib.crc32((db.functions.get_comment(func, repeatable=True) or "").encode(), c)
     size = func.end_ea - func.start_ea
-    h.update(db.bytes.get_bytes_at(func.start_ea, size))
-    return h.hexdigest()
+    c = zlib.crc32(db.bytes.get_bytes_at(func.start_ea, size), c)
+    return format(c & 0xFFFFFFFF, '08x')
 
 
 def _addr_list(funcs) -> str:
@@ -29,19 +29,38 @@ def _func_file(func_ea: int) -> str:
     return f"decompile/{func_ea:X}.c"
 
 
-def _read_file_hash(export_dir: str, func_ea: int) -> str | None:
-    path = os.path.join(export_dir, _func_file(func_ea))
+_HASH_INDEX = "hash_index.json"
+_EXPORT_CONFIG = "export_config.json"
+
+
+def _read_hash_index(export_dir: str) -> dict[int, str]:
+    path = os.path.join(export_dir, _HASH_INDEX)
     if not os.path.exists(path):
-        return None
+        return {}
     with open(path, encoding="utf-8") as f:
-        header = f.read(512)
-    for line in header.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("* func-hash:"):
-            return stripped.split(":", 1)[1].strip()
-        if stripped == "*/":
-            break
-    return None
+        raw = json.load(f)
+    return {int(k, 16): v for k, v in raw.items()}
+
+
+def _write_hash_index(export_dir: str, index: dict[int, str]) -> None:
+    path = os.path.join(export_dir, _HASH_INDEX)
+    raw = {format(ea, 'x'): h for ea, h in sorted(index.items())}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(raw, f)
+
+
+def _read_export_config(export_dir: str) -> dict:
+    path = os.path.join(export_dir, _EXPORT_CONFIG)
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_export_config(export_dir: str, config: dict) -> None:
+    path = os.path.join(export_dir, _EXPORT_CONFIG)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
 
 
 def _write_func(export_dir: str, func_ea: int, func_name: str, body: str,
@@ -123,8 +142,16 @@ def _patch_index(export_dir: str, updated_rows: list, remove_eas: set[int] | Non
             f.write(line + "\n")
 
 
+_EMPTY_METRICS = {
+    'logic_lines': 0, 'branch_density': 0, 'call_density': 0,
+    'string_density': 0, 'opaque_density': 0,
+    'total_insns': 0, 'bitop_density': 0, 'xor_density': 0,
+}
+
+
 def _export_single_func(db, export_dir: str, ea: int,
-                        digest: str | None = None) -> tuple | None:
+                        digest: str | None = None,
+                        compute_metrics: bool = True) -> tuple | None:
     func = db.functions.get_at(ea)
     if func is None:
         logger.warning("function not found at %#x", ea)
@@ -139,10 +166,10 @@ def _export_single_func(db, export_dir: str, ea: int,
     body = None
 
     func_size = func.end_ea - func.start_ea
-    im = insn_metrics(func)
+    im = insn_metrics(func) if compute_metrics else {}
     if func_size > MAX_FUNC_SIZE:
         fallback_reason = f"too large ({func_size} bytes)"
-    elif im['total_insns'] > MAX_FUNC_INSNS:
+    elif compute_metrics and im['total_insns'] > MAX_FUNC_INSNS:
         fallback_reason = f"too many insns ({im['total_insns']})"
 
     if fallback_reason is None:
@@ -164,8 +191,11 @@ def _export_single_func(db, export_dir: str, ea: int,
 
     out_file = _write_func(export_dir, ea, func_name, body, callers, callees,
                            fallback_reason, func_hash=digest, comment=comment)
-    metrics = analyze_body(body)
-    metrics.update(im)
+    if compute_metrics:
+        metrics = analyze_body(body)
+        metrics.update(im)
+    else:
+        metrics = dict(_EMPTY_METRICS)
     return (ea, func_name, metrics, out_file, callers, callees)
 
 
@@ -201,10 +231,11 @@ def export_exports(db, export_dir: str) -> None:
             f.write(f"{ea:#x}\t{name}\n")
 
 
-def export_functions(db, export_dir: str) -> None:
+def export_functions(db, export_dir: str, compute_metrics: bool = False) -> None:
     import ida_funcs
     os.makedirs(os.path.join(export_dir, "decompile"), exist_ok=True)
     rows = []
+    hash_index: dict[int, str] = {}
     all_funcs = list(db.functions.get_all())
     ok = skipped = 0
     for i, func in enumerate(all_funcs):
@@ -213,37 +244,46 @@ def export_functions(db, export_dir: str) -> None:
             skipped += 1
             continue
         digest = func_hash(db, func)
-        result = _export_single_func(db, export_dir, func.start_ea, digest=digest)
+        hash_index[func.start_ea] = digest
+        result = _export_single_func(db, export_dir, func.start_ea, digest=digest,
+                                      compute_metrics=compute_metrics)
         if result:
             rows.append(result)
             ok += 1
         if (i + 1) % 100 == 0:
             logger.info("progress: %d/%d (ok=%d skip=%d)", i + 1, len(all_funcs), ok, skipped)
     _write_index(export_dir, rows)
+    _write_hash_index(export_dir, hash_index)
     logger.info("functions done: total=%d ok=%d skipped=%d", len(all_funcs), ok, skipped)
 
 
-def export_incremental(db, export_dir: str, func_addrs: "list[int] | dict[int, str]") -> None:
+def export_incremental(db, export_dir: str, func_addrs: "list[int] | dict[int, str]",
+                       compute_metrics: bool = False) -> None:
     import time
     reasons: dict[int, str] = func_addrs if isinstance(func_addrs, dict) else {ea: "" for ea in func_addrs}
     os.makedirs(os.path.join(export_dir, "decompile"), exist_ok=True)
     t0 = time.monotonic()
+    hash_index = _read_hash_index(export_dir)
     updated_rows = []
     for ea, reason in reasons.items():
         func = db.functions.get_at(ea)
         digest = func_hash(db, func) if func else None
+        if digest:
+            hash_index[ea] = digest
         t1 = time.monotonic()
-        result = _export_single_func(db, export_dir, ea, digest=digest)
+        result = _export_single_func(db, export_dir, ea, digest=digest,
+                                      compute_metrics=compute_metrics)
         if result:
             updated_rows.append(result)
             reason_str = f"  [{reason}]" if reason else ""
             logger.info("refreshed %s (%.0fms)%s", result[1], (time.monotonic() - t1) * 1000, reason_str)
     _patch_index(export_dir, updated_rows)
+    _write_hash_index(export_dir, hash_index)
     elapsed = time.monotonic() - t0
     logger.info("incremental done: %d/%d in %.2fs", len(updated_rows), len(reasons), elapsed)
 
 
-def export_all(db, export_dir: str) -> None:
+def export_all(db, export_dir: str, compute_metrics: bool = False) -> None:
     os.makedirs(export_dir, exist_ok=True)
     decompile_dir = os.path.join(export_dir, "decompile")
     if os.path.isdir(decompile_dir):
@@ -252,18 +292,23 @@ def export_all(db, export_dir: str) -> None:
         p = os.path.join(export_dir, fname)
         if os.path.exists(p):
             os.remove(p)
+    _write_export_config(export_dir, {"compute_metrics": compute_metrics})
     export_strings(db, export_dir)
     export_imports(db, export_dir)
     export_exports(db, export_dir)
-    export_functions(db, export_dir)
+    export_functions(db, export_dir, compute_metrics=compute_metrics)
 
 
-def sync_exports(db, export_dir: str) -> None:
+def sync_exports(db, export_dir: str, compute_metrics: bool | None = None) -> None:
     import ida_funcs
     import time
     decompile_dir = os.path.join(export_dir, "decompile")
 
     t0 = time.monotonic()
+
+    if compute_metrics is None:
+        config = _read_export_config(export_dir)
+        compute_metrics = config.get("compute_metrics", False)
 
     if not os.path.isdir(decompile_dir):
         logger.info("no prior export found, warming up type info...")
@@ -281,7 +326,7 @@ def sync_exports(db, export_dir: str) -> None:
                 logger.info("warmup: %d/%d (%.0fs elapsed)", i + 1, total, time.monotonic() - t_warm)
         logger.info("type info warmed in %.1fs", time.monotonic() - t_warm)
         logger.info("running full export...")
-        export_all(db, export_dir)
+        export_all(db, export_dir, compute_metrics=compute_metrics)
         logger.info("sync done in %.1fs", time.monotonic() - t0)
         return
 
@@ -291,31 +336,9 @@ def sync_exports(db, export_dir: str) -> None:
         if not (raw and (raw.flags & ida_funcs.FUNC_LIB)):
             non_lib_eas.add(func.start_ea)
 
-    candidates: list[int] = []
-    for fname in os.listdir(decompile_dir):
-        if not fname.endswith(".c"):
-            continue
-        try:
-            ea = int(fname[:-2], 16)
-        except ValueError:
-            continue
-        if ea in non_lib_eas:
-            candidates.append(ea)
-
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    def _read(ea):
-        h = _read_file_hash(export_dir, ea)
-        return ea, h
-
-    file_hashes: dict[int, str] = {}
-    with ThreadPoolExecutor(max_workers=16) as pool:
-        for ea, h in (f.result() for f in as_completed(pool.submit(_read, ea) for ea in candidates)):
-            if h:
-                file_hashes[ea] = h
-
+    file_hashes = _read_hash_index(export_dir)
     t_read = time.monotonic()
-    logger.info("file hash read: %d files in %.2fs", len(file_hashes), t_read - t0)
+    logger.info("hash index read: %d entries in %.2fs", len(file_hashes), t_read - t0)
 
     stale: list[int] = []
     for ea in non_lib_eas:
@@ -339,9 +362,12 @@ def sync_exports(db, export_dir: str) -> None:
 
     if stale:
         logger.info("%d functions changed, running incremental export...", len(stale))
-        export_incremental(db, export_dir, stale)
-    elif orphans:
+        export_incremental(db, export_dir, stale, compute_metrics=compute_metrics)
+    if orphans:
+        for ea in orphans:
+            file_hashes.pop(ea, None)
         _patch_index(export_dir, [], remove_eas=set(orphans))
+        _write_hash_index(export_dir, file_hashes)
 
     logger.info("sync done in %.1fs", time.monotonic() - t0)
 
