@@ -8,6 +8,7 @@ dependencies = ["ida-domain==0.5.0"]
 
 [project.scripts]
 ida-bridge = "ida_bridge.cli:main"
+ida-syms = "ida_bridge.cli_syms:main"
 
 [build-system]
 requires = ["hatchling"]

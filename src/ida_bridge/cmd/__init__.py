@@ -18,6 +18,7 @@ from .decompile import run_pdc, run_mc
 from .edit import run_ca, run_cc, run_afn
 from .hexdump import run_hd
 from .search import run_sb
+from .symbols import run_syms
 
 __all__ = [
     "resolve",
@@ -28,4 +29,5 @@ __all__ = [
     "run_ca", "run_cc", "run_afn",
     "run_hd",
     "run_sb",
+    "run_syms",
 ]

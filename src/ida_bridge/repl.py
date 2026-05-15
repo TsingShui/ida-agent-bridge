@@ -41,8 +41,13 @@ def serve(db, port: int, ns: dict[str, Any], hooks=None,
                 except Exception:
                     pass
 
-    signal.signal(signal.SIGTERM, _signal_handler)
-    signal.signal(signal.SIGINT, _signal_handler)
+    try:
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
+    except ValueError:
+        # signal only works in the main thread; skip when running in a
+        # background thread (e.g. during tests).
+        pass
 
     ns.update({"db": db, "__builtins__": __builtins__})
 

@@ -346,5 +346,33 @@ def sync_exports(db, export_dir: str) -> None:
     logger.info("sync done in %.1fs", time.monotonic() - t0)
 
 
+def export_symbols(db, output_path: str) -> int:
+    """Export all function symbols as 'offset name' lines for tsrace --sym.
+
+    Format: one line per function, sorted by offset:
+        0x12d68c Java_com_xxx_initSdk
+        0x134500 sub_134500
+
+    Returns the number of symbols written.
+    """
+    import ida_nalt
+    image_base = ida_nalt.get_imagebase()
+
+    entries = []
+    for func in db.functions.get_all():
+        name = db.functions.get_name(func)
+        offset = func.start_ea - image_base
+        entries.append((offset, name))
+
+    entries.sort(key=lambda e: e[0])
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        for offset, name in entries:
+            f.write(f"0x{offset:x} {name}\n")
+
+    logger.info("symbols exported: %d entries → %s", len(entries), output_path)
+    return len(entries)
+
+
 def parse_addrs(s: str) -> list[int]:
     return [int(p.strip(), 16) for p in s.split(",") if p.strip()]

@@ -11,7 +11,7 @@ from .cmd import (
     run_pd, run_pdf, run_deps,
     run_pdc, run_mc,
     run_ca, run_cc, run_afn,
-    run_hd, run_sb,
+    run_hd, run_sb, run_syms,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ HELP = (
     "!mc  <addr|name> [maturity]  microcode\n"
     "!hd  <addr|name> [n=64]      hexdump\n"
     "!sb  <hex> [start] [end]     search byte sequence\n"
+    "!syms <path>                 export symbols for tsrace\n"
     "!pwd                         working directory\n"
 )
 
@@ -56,6 +57,7 @@ def dispatch(db, cmd_line: str) -> str:
         case "!afn":           return run_afn(db, parts)
         case "!hd":            return run_hd(db, parts)
         case "!sb":            return run_sb(db, parts)
+        case "!syms":          return run_syms(db, parts)
         case "!pwd":           return os.getcwd()
         case cmd:              return f"unknown command: {cmd}  (try !?)"
 
