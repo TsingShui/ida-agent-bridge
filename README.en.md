@@ -26,7 +26,7 @@ ida-bridge a.out --shell      # same, plus interactive shell on port 13121
 ida-bridge a.out --repl-only  # REPL only, skip export and hooks
 ```
 
-**First run:** IDA auto-analysis → decompilation warmup (grows with binary size) → full export
+**First run:** IDA auto-analysis → full export
 
 **Subsequent runs:** compare function hashes, only re-export changed functions — completes in seconds.
 
@@ -35,11 +35,10 @@ ida-bridge a.out --repl-only  # REPL only, skip export and hooks
 ```
 $ ida-bridge a.out &
 INFO  opening a.out...
-INFO  warmup: 100/842 (12s elapsed)
-INFO  warmup: 200/842 (25s elapsed)
+INFO  no prior export found, running full export...
+INFO  progress: 100/842 (ok=98 skip=2)
 ...
-INFO  type info warmed in 89.3s
-INFO  sync done in 94.1s
+INFO  sync done in 47.2s
 
 $ cc "analyze the JNI functions in a.out and find the signing logic"
 > read ida-bridge-a.out/function_index.tsv, search jni...
@@ -66,7 +65,9 @@ ida-bridge-<name>/
 ├── function_index.tsv    function index (addr, name, complexity metrics, call relations)
 ├── strings.tsv           string table (addr, encoding, contents)
 ├── imports.tsv           import table (addr, module, name)
-└── exports.tsv           export table (addr, name)
+├── exports.tsv           export table (addr, name)
+├── hash_index.json       function addr→CRC32 hash, for incremental export
+└── export_config.json    export config (compute_metrics, etc.)
 ```
 
 | Operation | Updates |
@@ -150,6 +151,7 @@ $ echo '!?' | nc localhost 13120
 !sb  <hex> [start] [end]     search byte sequence
 !hd  <addr|name> [n=64]      hexdump
 !pwd                         working directory
+!ping                        check server, show open file
 ```
 
 `addr` accepts hex address (`0x1388`) or symbol name (`_WPACKET_close`).

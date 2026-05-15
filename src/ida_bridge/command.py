@@ -35,6 +35,7 @@ HELP = (
     "!sb  <hex> [start] [end]     search byte sequence\n"
     "!syms <path>                 export symbols for tsrace\n"
     "!pwd                         working directory\n"
+    "!ping                        check server, show open file\n"
 )
 
 
@@ -59,6 +60,7 @@ def dispatch(db, cmd_line: str) -> str:
         case "!sb":            return run_sb(db, parts)
         case "!syms":          return run_syms(db, parts)
         case "!pwd":           return os.getcwd()
+        case "!ping":          return db.path or "unknown"
         case cmd:              return f"unknown command: {cmd}  (try !?)"
 
 

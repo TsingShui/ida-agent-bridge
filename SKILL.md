@@ -33,10 +33,9 @@ while ! nc -z localhost $PORT 2>/dev/null; do sleep 1; done
 
 **首次启动流程**（较慢，一次性）：
 1. IDA 自动分析（`auto_wait`）
-2. 全量反编译预热，填充类型信息写入 idb（~20s）
-3. 全量导出所有函数伪代码到 export_dir
+2. 全量导出所有函数伪代码到 export_dir
 
-**后续启动**：跳过预热，对比 hash 只导出变更函数，秒级完成。
+**后续启动**：对比 hash 只导出变更函数，秒级完成。
 
 > **Agent 只使用短连接模式。** `--shell` 是给人用的交互模式，Agent 不应使用。
 
@@ -90,6 +89,7 @@ echo '!hd  0x1234' | nc localhost $PORT                # hexdump 64 字节（默
 echo '!hd  0x1234 128' | nc localhost $PORT           # hexdump 128 字节
 echo '!hd  func_name' | nc localhost $PORT            # 符号名同样支持
 echo '!pwd' | nc localhost $PORT                      # 当前工作目录
+echo '!ping' | nc localhost $PORT                     # 探活，返回打开的文件路径
 ```
 
 地址和函数名均可互换（`0x...` 十六进制地址或符号名）。
@@ -131,7 +131,9 @@ done
 ├── strings.tsv           addr\tencoding\tcontents
 ├── imports.tsv           addr\tmodule\tname
 ├── exports.tsv           addr\tname
-└── function_index.tsv    addr\tname\tlogic_lines\tbranch_density\tcall_density\tstring_density\topaque_density\ttotal_insns\tbitop_density\txor_density\tcaller_count\tfile\tcallers\tcallees
+├── function_index.tsv    addr\tname\tlogic_lines\tbranch_density\tcall_density\tstring_density\topaque_density\ttotal_insns\tbitop_density\txor_density\tcaller_count\tfile\tcallers\tcallees
+├── hash_index.json       函数地址→CRC32 hash，增量导出用
+└── export_config.json    导出配置（compute_metrics 等）
 ```
 
 ```bash

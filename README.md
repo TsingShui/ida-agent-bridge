@@ -26,7 +26,7 @@ ida-bridge a.out --shell      # 同上，另开交互 shell（端口 13121）
 ida-bridge a.out --repl-only  # 仅启动 REPL，跳过导出和 hooks
 ```
 
-**首次启动**：IDA 自动分析 → 反编译预热（耗时随文件体积增长）→ 全量导出
+**首次启动**：IDA 自动分析 → 全量导出
 
 **后续启动**：对比函数 hash，只导出变更函数，秒级完成。
 
@@ -35,11 +35,10 @@ ida-bridge a.out --repl-only  # 仅启动 REPL，跳过导出和 hooks
 ```
 $ ida-bridge a.out &
 INFO  opening a.out...
-INFO  warmup: 100/842 (12s elapsed)
-INFO  warmup: 200/842 (25s elapsed)
+INFO  no prior export found, running full export...
+INFO  progress: 100/842 (ok=98 skip=2)
 ...
-INFO  type info warmed in 89.3s
-INFO  sync done in 94.1s
+INFO  sync done in 47.2s
 
 $ cc "分析 a.out 里的 JNI 函数，找出签名逻辑"
 > 读 ida-bridge-a.out/function_index.tsv，搜 jni...
@@ -66,7 +65,9 @@ ida-bridge-<name>/
 ├── function_index.tsv    函数索引（地址、名称、复杂度指标、调用关系）
 ├── strings.tsv           字符串表（addr、encoding、contents）
 ├── imports.tsv           导入表（addr、module、name）
-└── exports.tsv           导出表（addr、name）
+├── exports.tsv           导出表（addr、name）
+├── hash_index.json       函数地址→CRC32 hash，增量导出用
+└── export_config.json    导出配置（compute_metrics 等）
 ```
 
 以下操作会自动触发对应文件的重新导出：
@@ -152,6 +153,7 @@ $ echo '!?' | nc localhost 13120
 !sb  <hex> [start] [end]     search byte sequence
 !hd  <addr|name> [n=64]      hexdump
 !pwd                         working directory
+!ping                        check server, show open file
 ```
 
 `addr` 可用十六进制地址（`0x1388`）或符号名（`_WPACKET_close`）。
