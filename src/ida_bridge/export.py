@@ -13,11 +13,11 @@ MAX_FUNC_INSNS = 3000
 
 def func_hash(db, func) -> str:
     h = hashlib.md5()
-    h.update((db.functions.get_signature(func) or "").encode())
+    h.update((db.functions.get_name(func) or "").encode())
     h.update((db.functions.get_comment(func) or "").encode())
     h.update((db.functions.get_comment(func, repeatable=True) or "").encode())
-    for line in db.functions.get_disassembly(func):
-        h.update(line.encode())
+    size = func.end_ea - func.start_ea
+    h.update(db.bytes.get_bytes_at(func.start_ea, size))
     return h.hexdigest()
 
 
