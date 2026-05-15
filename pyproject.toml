@@ -4,11 +4,10 @@ version = "0.1.0"
 description = "IDA Pro agent bridge with CLI and real-time file sync"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["ida-domain==0.5.0"]
+dependencies = ["ida-domain==0.5.0", "cyclopts>=4.0"]
 
 [project.scripts]
-ida-bridge = "ida_bridge.cli:main"
-ida-syms = "ida_bridge.cli_syms:main"
+ida-bridge = "ida_bridge.cli:app"
 
 [build-system]
 requires = ["hatchling"]

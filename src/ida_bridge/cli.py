@@ -1,29 +1,41 @@
 #!/usr/bin/env python3
-"""ida-bridge — IDA Pro database export and real-time file sync.
-
-Usage:
-    ida-bridge <i64_path> <export_dir> [port]
-"""
+"""ida-bridge — IDA Pro database export and real-time file sync."""
 import sys
 import os
 import logging
+from typing import Annotated
 
-import idapro  # noqa: F401 — initializes IDA Pro runtime
+import cyclopts
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger("ida_bridge")
+
+app = cyclopts.App(name="ida-bridge", help="IDA Pro database export and real-time REPL server.")
 
 DEFAULT_PORT = 13120
 _KNOWN_EXTS = ('.i64', '.idb', '.so', '.dylib', '.dll', '.exe', '.elf', '.bin', '.out')
 
 
-def _default_export_dir(binary_path: str) -> str:
-    stem = os.path.basename(binary_path)
+def _strip_ext(path: str) -> str:
+    stem = os.path.basename(path)
     for ext in _KNOWN_EXTS:
         if stem.endswith(ext):
-            stem = stem[:-len(ext)]
-            break
-    return os.path.join(os.getcwd(), f'ida-bridge-{stem}')
+            return stem[:-len(ext)]
+    return stem
+
+
+def _default_export_dir(binary_path: str) -> str:
+    return os.path.join(os.getcwd(), f'ida-bridge-{_strip_ext(binary_path)}')
+
+
+def _open_db(binary: str):
+    """Open IDA database, wait for auto-analysis, return context manager."""
+    import idapro  # noqa: F401 — initializes IDA Pro runtime
+    from ida_domain import Database
+    from ida_domain.database import IdaCommandOptions
+    opts = IdaCommandOptions(auto_analysis=True)
+    logger.info("opening %s...", binary)
+    return Database.open(binary, opts)
 
 
 def _check_update_async() -> None:
@@ -56,41 +68,23 @@ def _check_update_async() -> None:
     threading.Thread(target=_check, daemon=True).start()
 
 
-def main() -> None:
+@app.default
+def run(
+    binary: Annotated[str, cyclopts.Parameter(help="Binary file or .i64 database to open.")],
+    export_dir: Annotated[str, cyclopts.Parameter(help="Output directory (default: ./ida-bridge-<name>/).")] = "",
+    port: Annotated[int, cyclopts.Parameter(help="REPL port.")] = DEFAULT_PORT,
+    *,
+    human_shell: Annotated[bool, cyclopts.Parameter(help="Enable human interactive shell on port+1.")] = False,
+    skip_export: Annotated[bool, cyclopts.Parameter(help="Skip export and hooks, start REPL only.")] = False,
+) -> None:
+    """Open a binary in IDA, export functions, and start a REPL server."""
     _check_update_async()
 
-    if len(sys.argv) < 2:
-        print(
-            "Usage: ida-bridge <binary_or_i64> [export_dir] [port] [flags]\n"
-            "\n"
-            "Arguments:\n"
-            "  binary_or_i64   binary file or .i64 database to open\n"
-            "  export_dir      output directory (default: ./ida-bridge-<name>/)\n"
-            "  port            REPL port (default: 13120)\n"
-            "\n"
-            "Flags:\n"
-            "  --shell         enable interactive shell on port+1 (default: 13121)\n"
-            "  --repl-only     skip all export and hooks, start REPL only\n"
-            "\n"
-            "Examples:\n"
-            "  ida-bridge a.out\n"
-            "  ida-bridge a.out /tmp/export 13200\n"
-            "  ida-bridge a.out --shell\n"
-            "  ida-bridge a.out --repl-only",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    if not export_dir:
+        export_dir = _default_export_dir(binary)
 
-    idb_path = sys.argv[1]
-    flags = [a for a in sys.argv[2:] if a.startswith('--')]
-    args = [a for a in sys.argv[2:] if not a.startswith('--')]
-    export_dir = args[0] if args else _default_export_dir(idb_path)
-    port = int(args[1]) if len(args) > 1 else DEFAULT_PORT
-    shell_port = DEFAULT_PORT + 1 if '--shell' in flags else None
-    repl_only = '--repl-only' in flags
+    shell_port = port + 1 if human_shell else None
 
-    from ida_domain import Database
-    from ida_domain.database import IdaCommandOptions
     from .hooks import AutoSyncHooks
     from .repl import serve
 
@@ -100,25 +94,20 @@ def main() -> None:
             print(f"error: port {port} already in use, another ida-bridge may be running", file=sys.stderr)
             sys.exit(1)
 
-    base = os.path.splitext(idb_path)[0]
+    base = os.path.splitext(binary)[0]
     locked = [f"{base}.{ext}" for ext in ("id0", "id1", "id2", "nam", "til")
               if os.path.isfile(f"{base}.{ext}")]
     if locked:
-        print(f"error: {idb_path} appears to be in use (found: {', '.join(os.path.basename(f) for f in locked)})", file=sys.stderr)
+        print(f"error: {binary} appears to be in use (found: {', '.join(os.path.basename(f) for f in locked)})", file=sys.stderr)
         print("if this is a stale crash, remove those files and retry", file=sys.stderr)
         sys.exit(1)
 
-    opts = IdaCommandOptions(auto_analysis=True)
-
-    logger.info("opening %s...", idb_path)
-
-    with Database.open(idb_path, opts) as db:
+    with _open_db(binary) as db:
         import ida_auto
         ida_auto.auto_wait()
 
-
-        if repl_only:
-            logger.info("repl-only mode, skipping export")
+        if skip_export:
+            logger.info("skip-export mode, skipping export")
             try:
                 serve(db, port, {}, shell_port=shell_port)
             finally:
@@ -138,5 +127,51 @@ def main() -> None:
                 logger.info("done.")
 
 
+@app.command
+def init() -> None:
+    """Install SKILL.md and reference docs to ~/.claude/skills/ida-agent-bridge/."""
+    import shutil
+    import pathlib
+
+    repo = pathlib.Path(__file__).parent.parent.parent.resolve()  # src/ida_bridge -> repo root
+    target = (pathlib.Path.home() / ".claude" / "skills" / "ida-agent-bridge").resolve()
+
+    if repo == target:
+        print(f"already at {target}")
+        return
+
+    target.mkdir(parents=True, exist_ok=True)
+
+    # SKILL.md
+    shutil.copy2(repo / "SKILL.md", target / "SKILL.md")
+
+    # reference/
+    ref_src = repo / "reference"
+    ref_dst = target / "reference"
+    if ref_dst.exists():
+        shutil.rmtree(ref_dst)
+    shutil.copytree(ref_src, ref_dst)
+
+    print(f"installed to {target}")
+
+
+@app.command
+def syms(
+    binary: Annotated[str, cyclopts.Parameter(help="Binary file or .i64 database.")],
+    output: Annotated[str, cyclopts.Parameter(help="Output symbols file (default: <name>.syms).")] = "",
+) -> None:
+    """Export function offset/name pairs, one per line, sorted by address."""
+    if not output:
+        output = os.path.join(os.getcwd(), f"{_strip_ext(binary)}.syms")
+
+    with _open_db(binary) as db:
+        import ida_auto
+        ida_auto.auto_wait()
+
+        from .export import export_symbols
+        count = export_symbols(db, output)
+        print(f"{count} symbols → {output}")
+
+
 if __name__ == "__main__":
-    main()
+    app()

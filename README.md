@@ -66,8 +66,8 @@ uv tool install -e ~/.claude/skills/ida-agent-bridge
 
 ```bash
 ida-bridge a.out              # 启动，导出到 ./ida-bridge-a.out/
-ida-bridge a.out --shell      # 另开交互 shell（端口 13121）
-ida-bridge a.out --repl-only  # 仅启动 REPL，跳过导出
+ida-bridge a.out --human-shell  # 另开交互 shell（端口 13121）
+ida-bridge a.out --skip-export  # 跳过导出，仅启动 REPL
 ```
 
 首次启动做一次全量导出（IDA 自动分析 + 反编译所有函数）。之后每次启动对比 CRC32 hash，只增量导出变更函数，秒级完成。
@@ -167,10 +167,7 @@ echo "!axt $ADDR" | nc localhost 13120
 !syms <path>                导出符号表
 !ping                       探活，返回打开的文件路径
 !pwd                        工作目录
-```
-
-```bash
-echo '!quit' | nc localhost 13120      # 关闭服务
+!quit                       关闭服务
 ```
 
 ---

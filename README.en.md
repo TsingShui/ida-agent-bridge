@@ -66,8 +66,8 @@ Two lines, done.
 
 ```bash
 ida-bridge a.out              # start, export to ./ida-bridge-a.out/
-ida-bridge a.out --shell      # plus interactive shell on port 13121
-ida-bridge a.out --repl-only  # REPL only, skip export
+ida-bridge a.out --human-shell      # plus interactive shell on port 13121
+ida-bridge a.out --skip-export  # REPL only, skip export
 ```
 
 First run does a full export (IDA auto-analysis + decompile all functions). Subsequent runs compare CRC32 hashes, only re-export changed functions — completes in seconds.
@@ -167,10 +167,7 @@ All commands are sent via `echo '!cmd' | nc localhost 13120`. Addresses accept h
 !syms <path>                export symbol table
 !ping                       health check, returns open file path
 !pwd                        working directory
-```
-
-```bash
-echo '!quit' | nc localhost 13120      # shut down
+!quit                       shut down server
 ```
 
 ---
@@ -200,7 +197,7 @@ Modifications inside scripts (rename, comment, etc.) automatically trigger files
 For humans — with command history and live feedback:
 
 ```bash
-ida-bridge a.out --shell
+ida-bridge a.out --human-shell
 rlwrap nc localhost 13121
 ```
 
